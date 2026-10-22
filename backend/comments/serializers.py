@@ -1,6 +1,6 @@
 import os
 
-from django.core.validators import RegexValidator
+from django.core.validators import RegexValidator, URLValidator
 from django.db import transaction
 from rest_framework import serializers
 
@@ -10,7 +10,10 @@ from .services.captcha import CaptchaService
 from .services.identity import IdentityError, IdentityService
 from .services.sanitizer import HtmlSanitizer, HtmlValidationError
 
-USERNAME_VALIDATOR = RegexValidator(r"^[A-Za-z0-9]+$", "Только латинские буквы и цифры")
+# \A...\Z вместо ^...$: так в конец имени нельзя подсунуть перевод строки
+USERNAME_VALIDATOR = RegexValidator(r"\A[A-Za-z0-9]+\Z", "Только латинские буквы и цифры")
+# Home page показывается как ссылка, поэтому разрешены только http и https (без ftp и прочего)
+HOME_PAGE_VALIDATOR = URLValidator(schemes=["http", "https"])
 MAX_TEXT_LENGTH = 5000
 PASSWORD_MIN_LENGTH = 6
 ANONYMOUS_NAME = "Аноним"
@@ -124,7 +127,7 @@ class PreviewSerializer(serializers.Serializer):
 class CommentCreateSerializer(serializers.Serializer):
     user_name = serializers.CharField(max_length=50, required=False, validators=[USERNAME_VALIDATOR])
     email = serializers.EmailField(required=False)
-    home_page = serializers.URLField(required=False, allow_blank=True)
+    home_page = serializers.URLField(required=False, allow_blank=True, validators=[HOME_PAGE_VALIDATOR])
     text = serializers.CharField(max_length=MAX_TEXT_LENGTH)
     parent = serializers.PrimaryKeyRelatedField(
         queryset=Comment.objects.all(), required=False, allow_null=True
@@ -199,7 +202,7 @@ class CommentCreateSerializer(serializers.Serializer):
 class RegisterSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=50, validators=[USERNAME_VALIDATOR])
     email = serializers.EmailField()
-    home_page = serializers.URLField(required=False, allow_blank=True)
+    home_page = serializers.URLField(required=False, allow_blank=True, validators=[HOME_PAGE_VALIDATOR])
     password = serializers.CharField(
         write_only=True,
         min_length=PASSWORD_MIN_LENGTH,
