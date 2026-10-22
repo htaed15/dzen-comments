@@ -111,3 +111,29 @@ input.locked { background: var(--head); color: var(--muted); }
 .profile-comment { border-top: 1px solid var(--line); padding: 10px 0; }
 .profile-comment header { display: flex; justify-content: space-between; gap: 12px; }
 .profile-comment header a { color: var(--accent); font-size: 14px; }
+
+/* Заглавные комментарии в виде таблицы */
+.ctable { width: 100%; border-collapse: collapse; }
+.ctable thead th { text-align: left; padding: 0; border-bottom: 2px solid var(--line); }
+.ctable thead th:last-child { text-align: right; }
+.ctable thead button { width: 100%; text-align: inherit; border: 0; border-radius: 0; background: transparent; font-weight: 600; padding: 8px 6px; }
+.ctable thead button:hover { background: rgba(0, 0, 0, .04); }
+.ctable tbody { border-bottom: 1px solid var(--line); }
+.ctable tbody:hover .meta td { background: rgba(0, 0, 0, .02); }
+.ctable td { padding: 8px 6px; vertical-align: middle; }
+.ctable .who { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ctable .who .name { font-weight: 600; color: var(--ink); text-decoration: none; }
+.ctable .who a.name:hover { color: var(--accent); text-decoration: underline; }
+.ctable .who .name.anon { color: var(--muted); font-style: italic; font-weight: 500; }
+.ctable .site { font-size: 13px; color: var(--accent); }
+.ctable .mail { color: var(--muted); font-size: 14px; }
+.ctable .when-cell { text-align: right; white-space: nowrap; }
+.ctable .when { color: var(--muted); font-size: 13px; text-decoration: none; }
+.ctable .when:hover { color: var(--accent); }
+.ctable .content td { padding: 0 6px 14px; }
+.comment.bare { border-left: 0; padding-left: 0; margin-top: 0; }
+@media (max-width: 640px) {
+  .ctable tbody, .ctable tbody tr, .ctable tbody td { display: block; width: 100%; }
+  .ctable thead th:last-child { text-align: left; }
+  .ctable .when-cell { text-align: left; }
+}
