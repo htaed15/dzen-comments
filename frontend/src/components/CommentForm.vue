@@ -62,7 +62,8 @@ function wrap(tag) {
   if (tag === 'a') {
     const href = prompt('Ссылка (http:// или https://)', 'https://')
     if (!href) return
-    open = `<a href="${href.replace(/"/g, '')}" title="">`
+    const title = (prompt('Подсказка при наведении (можно оставить пустой)', '') || '').replace(/["<>]/g, '').trim()
+    open = `<a href="${href.replace(/["<>\s]/g, '')}"${title ? ` title="${title}"` : ''}>`
   }
   form.text = form.text.slice(0, start) + open + selected + `</${tag}>` + form.text.slice(end)
   requestAnimationFrame(() => {

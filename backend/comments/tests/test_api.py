@@ -23,11 +23,14 @@ class SanitizerTests(SimpleTestCase):
         for part in ("<strong>a</strong>", "<i>b</i>", "<code>c</code>", 'href="https://x.com"'):
             self.assertIn(part, out)
 
-    def test_script_and_js_links_removed(self):
-        out = self.s.clean('<script>alert(1)</script><a href="javascript:alert(1)">x</a><img src=x onerror=alert(1)>')
+    def test_script_and_foreign_tags_removed(self):
+        out = self.s.clean('<script>alert(1)</script><img src=x onerror=alert(1)>text')
         self.assertNotIn("<script", out)
-        self.assertNotIn("javascript:", out)
         self.assertNotIn("onerror", out)
+
+    def test_javascript_link_rejected(self):
+        with self.assertRaises(HtmlValidationError):
+            self.s.clean('<a href="javascript:alert(1)">x</a>')
 
     def test_unclosed_tag_rejected(self):
         with self.assertRaises(HtmlValidationError):
@@ -36,6 +39,30 @@ class SanitizerTests(SimpleTestCase):
     def test_wrong_nesting_rejected(self):
         with self.assertRaises(HtmlValidationError):
             self.s.clean("<i><strong>abc</i></strong>")
+
+    def test_uppercase_tags_rejected(self):
+        for text in ("<STRONG>a</STRONG>", "<I>a</i>", "<strong>a</STRONG>"):
+            with self.assertRaises(HtmlValidationError, msg=text):
+                self.s.clean(text)
+
+    def test_unquoted_or_single_quoted_attrs_rejected(self):
+        for text in ('<a href=http://x.com>l</a>', "<a href='http://x.com'>l</a>", '<a HREF="http://x.com">l</a>'):
+            with self.assertRaises(HtmlValidationError, msg=text):
+                self.s.clean(text)
+
+    def test_link_requires_valid_href(self):
+        for text in ("<a>l</a>", '<a href="">l</a>', '<a title="t">l</a>', '<a href="/relative">l</a>'):
+            with self.assertRaises(HtmlValidationError, msg=text):
+                self.s.clean(text)
+
+    def test_empty_title_and_extra_attrs_rejected(self):
+        for text in ('<a href="http://x.com" title="">l</a>', '<i class="x">a</i>', '<a href="http://x.com" onclick="f()">l</a>'):
+            with self.assertRaises(HtmlValidationError, msg=text):
+                self.s.clean(text)
+
+    def test_self_closing_rejected(self):
+        with self.assertRaises(HtmlValidationError):
+            self.s.clean("<i/>")
 
 
 class BaseApiTest(TestCase):

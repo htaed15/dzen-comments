@@ -1,16 +1,49 @@
 // Клиентская валидация. Сервер проверяет всё то же самое повторно.
 const ALLOWED = new Set(['a', 'code', 'i', 'strong'])
 
+const TAG_RE = /<(\/?)([A-Za-z][A-Za-z0-9]*)((?:\s[^<>]*)?)(\/?)>/g
+const ATTR_RE = /^\s+([a-z]+)="([^"<>]*)"/
+const HREF_RE = /^https?:\/\/[^\s"<>]+$/
+const ATTRS = { a: new Set(['href', 'title']) }
+
+function checkAttrs(tag, raw) {
+  const allowed = ATTRS[tag] || new Set()
+  const found = {}
+  let rest = raw
+  while (rest.trim()) {
+    const m = ATTR_RE.exec(rest)
+    if (!m) return `Тег <${tag}>: атрибуты должны быть в виде имя="значение" в двойных кавычках, в нижнем регистре`
+    const [all, key, value] = m
+    if (!allowed.has(key)) return `Тег <${tag}>: атрибут ${key} не разрешён`
+    if (key in found) return `Тег <${tag}>: атрибут ${key} указан дважды`
+    if (!value.trim()) return `Тег <${tag}>: атрибут ${key} не может быть пустым`
+    found[key] = value
+    rest = rest.slice(all.length)
+  }
+  if (tag === 'a') {
+    if (!('href' in found)) return 'Тег <a> должен содержать атрибут href'
+    if (!HREF_RE.test(found.href)) return 'Адрес в href должен начинаться с http:// или https://'
+  }
+  return ''
+}
+
+// Те же правила, что и на сервере (services/sanitizer.py)
 export function checkTags(text) {
   const stack = []
-  const re = /<(\/?)([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>/g
-  let m
-  while ((m = re.exec(text))) {
-    const [, closing, rawName] = m
-    const name = rawName.toLowerCase()
-    if (!ALLOWED.has(name)) continue
-    if (!closing) stack.push(name)
-    else if (stack.pop() !== name) return `Неожиданный закрывающий тег </${name}>`
+  for (const m of text.matchAll(TAG_RE)) {
+    const [, closing, rawName, attrs, selfClose] = m
+    const tag = rawName.toLowerCase()
+    if (!ALLOWED.has(tag)) continue
+    if (rawName !== tag) return `Тег <${rawName}> должен быть в нижнем регистре: <${tag}>`
+    if (selfClose) return `Тег <${tag}/> должен иметь закрывающий тег </${tag}>`
+    if (closing) {
+      if (attrs.trim()) return `У закрывающего тега </${tag}> не может быть атрибутов`
+      if (stack.pop() !== tag) return `Неожиданный закрывающий тег </${tag}>`
+    } else {
+      const err = checkAttrs(tag, attrs)
+      if (err) return err
+      stack.push(tag)
+    }
   }
   return stack.length ? `Не закрыт тег <${stack.pop()}>` : ''
 }
