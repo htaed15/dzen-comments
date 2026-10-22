@@ -30,15 +30,16 @@ def process_attachment(attachment_id: int) -> None:
 def notify_parent_author(comment_id: int) -> None:
     comment = (
         Comment.objects.filter(pk=comment_id, parent__isnull=False)
-        .select_related("author", "parent__author")
+        .select_related("profile", "parent__profile")
         .first()
     )
-    if comment is None:
-        return
+    if comment is None or comment.parent.profile_id == comment.profile_id:
+        return  # самому себе не пишем
+    who = "Аноним" if comment.is_anonymous else comment.profile.username
     send_mail(
-        subject=f"Новый ответ на ваш комментарий от {comment.author.user_name}",
+        subject=f"Новый ответ на ваш комментарий от {who}",
         message=strip_tags(comment.text),
         from_email=None,
-        recipient_list=[comment.parent.author.email],
+        recipient_list=[comment.parent.profile.email],
         fail_silently=True,
     )

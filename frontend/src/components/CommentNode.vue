@@ -1,28 +1,51 @@
 <script setup>
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
+import { fmtDate } from '../utils'
+import Avatar from './Avatar.vue'
 import CommentForm from './CommentForm.vue'
 
-const props = defineProps({ comment: Object, authed: Boolean, depth: { type: Number, default: 0 } })
+const props = defineProps({
+  comment: Object,
+  authed: Boolean,
+  depth: { type: Number, default: 0 },
+  focus: { type: Number, default: null },
+})
 const emit = defineEmits(['changed', 'open-image', 'open-text'])
 const replying = ref(false)
-
-const fmt = (iso) =>
-  new Date(iso).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })
+const el = ref(null)
 
 function done() {
   replying.value = false
   emit('changed')
 }
+
+// Пришли по ссылке на конкретный комментарий: прокручиваем к нему
+onMounted(() => {
+  if (props.focus === props.comment.id && el.value) {
+    el.value.scrollIntoView({ block: 'center' })
+  }
+})
 </script>
 
 <template>
-  <article class="comment" :style="{ '--depth': Math.min(depth, 6) }">
+  <article
+    :id="'comment-' + comment.id"
+    ref="el"
+    class="comment"
+    :class="{ focused: focus === comment.id }"
+    :style="{ '--depth': Math.min(depth, 6) }"
+  >
     <header>
-      <b>{{ comment.user_name }}</b>
+      <Avatar :name="comment.user_name" :anonymous="comment.is_anonymous" />
+      <a v-if="comment.profile" class="name" :href="'#/u/' + encodeURIComponent(comment.profile)">
+        {{ comment.user_name }}
+      </a>
+      <b v-else class="name anon">{{ comment.user_name }}</b>
+      <span v-if="comment.email" class="hint">{{ comment.email }}</span>
       <a v-if="comment.home_page" :href="comment.home_page" rel="nofollow noopener" target="_blank">
         {{ comment.home_page }}
       </a>
-      <time>{{ fmt(comment.created_at) }}</time>
+      <a class="when" :href="'#/c/' + comment.id" title="Ссылка на комментарий">{{ fmtDate(comment.created_at) }}</a>
     </header>
 
     <!-- text уже очищен сервером (белый список тегов) -->
@@ -53,6 +76,7 @@ function done() {
       :comment="child"
       :authed="authed"
       :depth="depth + 1"
+      :focus="focus"
       @changed="emit('changed')"
       @open-image="emit('open-image', $event)"
       @open-text="emit('open-text', $event)"
