@@ -17,22 +17,24 @@ export function checkTags(text) {
 
 export function validateForm(f, { authed }) {
   const e = {}
+  // поля 1-3 зарегистрированному пользователю подставляются автоматически
   if (!authed) {
     if (!f.user_name) e.user_name = 'Обязательное поле'
     else if (!/^[A-Za-z0-9]+$/.test(f.user_name)) e.user_name = 'Только латинские буквы и цифры'
     if (!f.email) e.email = 'Обязательное поле'
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email)) e.email = 'Неверный формат e-mail'
-    if (!f.captcha_answer) e.captcha_answer = 'Введите символы с картинки'
-    else if (!/^[A-Za-z0-9]+$/.test(f.captcha_answer)) e.captcha_answer = 'Только латинские буквы и цифры'
-  }
-  if (f.home_page) {
-    try {
-      const u = new URL(f.home_page)
-      if (!['http:', 'https:'].includes(u.protocol)) throw new Error()
-    } catch {
-      e.home_page = 'Неверный формат URL'
+    if (f.home_page) {
+      try {
+        const u = new URL(f.home_page)
+        if (!['http:', 'https:'].includes(u.protocol)) throw new Error()
+      } catch {
+        e.home_page = 'Неверный формат URL'
+      }
     }
   }
+  // CAPTCHA нужна всем
+  if (!f.captcha_answer) e.captcha_answer = 'Введите символы с картинки'
+  else if (!/^[A-Za-z0-9]+$/.test(f.captcha_answer)) e.captcha_answer = 'Только латинские буквы и цифры'
   if (!f.text.trim()) e.text = 'Обязательное поле'
   else {
     const tagError = checkTags(f.text)

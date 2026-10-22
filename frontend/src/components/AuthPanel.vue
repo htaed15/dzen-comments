@@ -1,14 +1,24 @@
 <script setup>
-import { reactive, ref } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import { api, flattenErrors, setToken } from '../api'
 
-defineProps({ authed: Boolean })
+const props = defineProps({ authed: Boolean })
 const emit = defineEmits(['auth'])
 
 const open = ref(false)
 const mode = ref('login')
-const f = reactive({ username: '', email: '', password: '' })
+const f = reactive({ username: '', email: '', home_page: '', password: '' })
 const errors = ref({})
+const myName = ref('')
+
+async function loadMe() {
+  try {
+    myName.value = (await api.me()).username
+  } catch {
+    myName.value = ''
+  }
+}
+watch(() => props.authed, (v) => (v ? loadMe() : (myName.value = '')), { immediate: true })
 
 function checkPassword(value) {
   if (value.length < 6) return 'Пароль должен быть не короче 6 символов'
@@ -19,19 +29,28 @@ function checkPassword(value) {
 async function go() {
   errors.value = {}
   if (mode.value === 'register') {
-    const problem = checkPassword(f.password)
-    if (problem) {
-      errors.value = { password: problem }
+    const local = {}
+    if (!/^[A-Za-z0-9]+$/.test(f.username)) local.username = 'Только латинские буквы и цифры'
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email)) local.email = 'Неверный формат e-mail'
+    const pw = checkPassword(f.password)
+    if (pw) local.password = pw
+    if (Object.keys(local).length) {
+      errors.value = local
       return
     }
   }
   try {
-    const data =
-      mode.value === 'login'
-        ? await api.login({ username: f.username, password: f.password })
-        : await api.register({ ...f })
+    let data
+    if (mode.value === 'login') {
+      data = await api.login({ username: f.username, password: f.password })
+    } else {
+      const body = { username: f.username, email: f.email, password: f.password }
+      if (f.home_page) body.home_page = f.home_page
+      data = await api.register(body)
+    }
     setToken(data.access)
     open.value = false
+    f.password = ''
     emit('auth', true)
   } catch (e) {
     errors.value = flattenErrors(e.data)
@@ -46,7 +65,7 @@ function logout() {
 <template>
   <div class="auth">
     <template v-if="authed">
-      <span class="hint">Вы вошли, CAPTCHA не нужна</span>
+      <a v-if="myName" :href="'#/u/' + encodeURIComponent(myName)">Мой профиль ({{ myName }})</a>
       <button type="button" @click="logout">Выйти</button>
     </template>
     <template v-else>
@@ -56,9 +75,14 @@ function logout() {
           <button type="button" :class="{ on: mode === 'login' }" @click="mode = 'login'">Вход</button>
           <button type="button" :class="{ on: mode === 'register' }" @click="mode = 'register'">Регистрация</button>
         </div>
-        <input v-model.trim="f.username" placeholder="Логин (латиница, цифры)" />
+        <input v-model.trim="f.username" placeholder="User Name (латиница, цифры)" />
         <input v-if="mode === 'register'" v-model.trim="f.email" type="email" placeholder="E-mail" />
-        <input v-model="f.password" type="password" :placeholder="mode === 'register' ? 'Пароль (от 6 символов, буквы и цифры)' : 'Пароль'" />
+        <input v-if="mode === 'register'" v-model.trim="f.home_page" placeholder="Home page (необязательно)" />
+        <input
+          v-model="f.password"
+          type="password"
+          :placeholder="mode === 'register' ? 'Пароль (от 6 символов, буквы и цифры)' : 'Пароль'"
+        />
         <small v-for="(msg, key) in errors" :key="key" class="err">{{ msg }}</small>
         <button class="primary" type="submit">{{ mode === 'login' ? 'Войти' : 'Создать аккаунт' }}</button>
       </form>

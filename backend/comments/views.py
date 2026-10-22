@@ -1,31 +1,59 @@
 import ipaddress
 
 from django.core.cache import cache
+from django.db.models import Case, CharField, F, Value, When
+from django.db.models.functions import Lower
+from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .events import get_version
-from .models import Comment
+from .models import Comment, Profile
 from .serializers import (
+    ANONYMOUS_NAME,
     CommentCreateSerializer,
     CommentSerializer,
     PreviewSerializer,
+    ProfileCommentSerializer,
+    ProfileSerializer,
     RegisterSerializer,
 )
 from .services.captcha import CaptchaService
 
-# Белый список полей сортировки — защита от подстановки произвольных полей в ORDER BY.
+# Белый список полей сортировки: защита от подстановки произвольных полей в ORDER BY.
+# Для анонимных комментариев сортируем по отображаемому имени, чтобы порядок
+# в списке не выдавал настоящее имя автора.
 ORDERING_FIELDS = {
-    "user_name": "author__user_name",
-    "email": "author__email",
+    "user_name": "sort_name",
+    "email": "sort_email",
     "created_at": "created_at",
 }
 DEFAULT_ORDERING = "-created_at"  # LIFO
 CACHE_TTL = 60
+
+
+def sort_annotations():
+    return {
+        "sort_name": Lower(
+            Case(
+                When(is_anonymous=True, then=Value(ANONYMOUS_NAME)),
+                default=F("profile__username"),
+                output_field=CharField(),
+            )
+        ),
+        "sort_email": Lower(
+            Case(
+                When(is_anonymous=True, then=Value("")),
+                default=F("profile__email"),
+                output_field=CharField(),
+            )
+        ),
+    }
 
 
 def normalize_ordering(raw):
@@ -98,14 +126,15 @@ class CommentViewSet(viewsets.GenericViewSet):
         if data is None:
             roots_qs = (
                 Comment.objects.filter(parent__isnull=True)
-                .select_related("author")
+                .select_related("profile")
                 .prefetch_related("attachments")
+                .annotate(**sort_annotations())
                 .order_by(*db_ordering(ordering))
             )
             roots = list(self.paginate_queryset(roots_qs))
             descendants = list(
                 Comment.objects.filter(root__in=roots)
-                .select_related("author")
+                .select_related("profile")
                 .prefetch_related("attachments")
                 .order_by("created_at", "id")
             )
@@ -129,6 +158,25 @@ class CommentViewSet(viewsets.GenericViewSet):
         serializer.is_valid(raise_exception=True)
         return Response({"html": serializer.validated_data["text"]})
 
+    @action(detail=True, methods=["get"])
+    def thread(self, request, pk=None):
+        """Вся ветка, в которой написан комментарий; focus: комментарий, к которому пришли."""
+        comment = get_object_or_404(Comment.objects.select_related("root"), pk=pk)
+        root_id = comment.root_id or comment.pk
+        root = (
+            Comment.objects.select_related("profile")
+            .prefetch_related("attachments")
+            .get(pk=root_id)
+        )
+        descendants = list(
+            Comment.objects.filter(root_id=root_id)
+            .select_related("profile")
+            .prefetch_related("attachments")
+            .order_by("created_at", "id")
+        )
+        build_tree([root], descendants)
+        return Response({"focus": comment.pk, "root": CommentSerializer(root).data})
+
 
 class CaptchaView(APIView):
     def get(self, request):
@@ -142,9 +190,42 @@ class RegisterView(APIView):
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-        refresh = RefreshToken.for_user(user)
+        profile = serializer.save()
+        refresh = RefreshToken.for_user(profile.user)
         return Response(
-            {"access": str(refresh.access_token), "refresh": str(refresh)},
+            {"access": str(refresh.access_token), "refresh": str(refresh), "username": profile.username},
             status=status.HTTP_201_CREATED,
         )
+
+
+class MeView(APIView):
+    """Данные своего профиля: ими форма заполняет поля 1-3 автоматически."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = getattr(request.user, "profile", None)
+        if profile is None:
+            return Response({"detail": "У аккаунта нет профиля"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(ProfileSerializer(profile).data)
+
+
+class ProfileView(APIView):
+    """Публичный профиль: только неанонимные комментарии пользователя."""
+
+    def get(self, request, username):
+        profile = get_object_or_404(Profile, username__iexact=username)
+        queryset = (
+            Comment.objects.filter(profile=profile, is_anonymous=False)
+            .order_by("-created_at", "-id")
+        )
+        paginator = CommentPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        response = paginator.get_paginated_response(ProfileCommentSerializer(page, many=True).data)
+        response.data["profile"] = {
+            "username": profile.username,
+            "home_page": profile.home_page,
+            "registered": profile.is_registered,
+            "joined": profile.created_at,
+        }
+        return response

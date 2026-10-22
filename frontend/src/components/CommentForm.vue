@@ -1,12 +1,19 @@
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { api, flattenErrors, getToken } from '../api'
+import { onMounted, reactive, ref, watch } from 'vue'
+import { api, flattenErrors } from '../api'
 import { validateFile, validateForm } from '../validators'
 
 const props = defineProps({ parentId: { type: Number, default: null }, authed: Boolean })
 const emit = defineEmits(['created', 'cancel'])
 
-const form = reactive({ user_name: '', email: '', home_page: '', text: '', captcha_answer: '' })
+const form = reactive({
+  user_name: '',
+  email: '',
+  home_page: '',
+  text: '',
+  captcha_answer: '',
+  anonymous: false,
+})
 const file = ref(null)
 const errors = ref({})
 const captcha = reactive({ key: '', image: '' })
@@ -15,17 +22,34 @@ const busy = ref(false)
 const textarea = ref(null)
 const fileInput = ref(null)
 
-const showIdentity = computed(() => !props.authed)
-
 async function loadCaptcha() {
   const data = await api.captcha()
   captcha.key = data.key
   captcha.image = data.image
   form.captcha_answer = ''
 }
-onMounted(() => { if (showIdentity.value) loadCaptcha() })
-// после выхода из аккаунта форма снова просит имя и CAPTCHA
-watch(showIdentity, (visible) => { if (visible) loadCaptcha() })
+
+// Зарегистрированному пользователю поля 1-3 подставляются из профиля
+async function fillFromProfile() {
+  if (!props.authed) {
+    form.user_name = form.email = form.home_page = ''
+    return
+  }
+  try {
+    const me = await api.me()
+    form.user_name = me.username
+    form.email = me.email
+    form.home_page = me.home_page || ''
+  } catch {
+    /* токен мог устареть, форма сама перейдёт в режим гостя */
+  }
+}
+
+onMounted(() => {
+  loadCaptcha()
+  fillFromProfile()
+})
+watch(() => props.authed, fillFromProfile)
 
 // Панель тегов: оборачивает выделенный текст
 function wrap(tag) {
@@ -80,13 +104,14 @@ async function submit() {
   const body = new FormData()
   body.append('text', form.text)
   if (props.parentId) body.append('parent', props.parentId)
-  if (showIdentity.value) {
+  if (!props.authed) {
     body.append('user_name', form.user_name)
     body.append('email', form.email)
     if (form.home_page) body.append('home_page', form.home_page)
-    body.append('captcha_key', captcha.key)
-    body.append('captcha_answer', form.captcha_answer)
   }
+  body.append('anonymous', form.anonymous ? 'true' : 'false')
+  body.append('captcha_key', captcha.key)
+  body.append('captcha_answer', form.captcha_answer)
   if (file.value) body.append('file', file.value)
 
   busy.value = true
@@ -101,30 +126,37 @@ async function submit() {
     errors.value = flattenErrors(e.data)
   } finally {
     busy.value = false
-    if (showIdentity.value) loadCaptcha()
+    loadCaptcha()
   }
 }
 </script>
 
 <template>
   <form class="form" novalidate @submit.prevent="submit">
-    <div v-if="showIdentity" class="grid">
+    <div class="grid">
       <label>
         User Name *
-        <input v-model.trim="form.user_name" maxlength="50" autocomplete="nickname" />
+        <input
+          v-model.trim="form.user_name"
+          maxlength="50"
+          autocomplete="nickname"
+          :readonly="authed"
+          :class="{ locked: authed }"
+        />
         <small v-if="errors.user_name" class="err">{{ errors.user_name }}</small>
       </label>
       <label>
         E-mail *
-        <input v-model.trim="form.email" type="email" autocomplete="email" />
+        <input v-model.trim="form.email" type="email" autocomplete="email" :readonly="authed" :class="{ locked: authed }" />
         <small v-if="errors.email" class="err">{{ errors.email }}</small>
       </label>
       <label>
         Home page
-        <input v-model.trim="form.home_page" placeholder="https://" />
+        <input v-model.trim="form.home_page" placeholder="https://" :readonly="authed" :class="{ locked: authed }" />
         <small v-if="errors.home_page" class="err">{{ errors.home_page }}</small>
       </label>
     </div>
+    <small v-if="authed" class="hint">Поля заполнены из вашего профиля</small>
 
     <div class="toolbar">
       <button type="button" @click="wrap('i')">[i]</button>
@@ -141,12 +173,19 @@ async function submit() {
     </div>
     <small v-if="errors.file" class="err">{{ errors.file }}</small>
 
-    <div v-if="showIdentity" class="captcha">
+    <div class="captcha">
       <img v-if="captcha.image" :src="captcha.image" alt="CAPTCHA" />
       <button type="button" class="link" @click="loadCaptcha">Обновить</button>
       <input v-model.trim="form.captcha_answer" maxlength="8" placeholder="Символы с картинки *" />
       <small v-if="errors.captcha_answer" class="err">{{ errors.captcha_answer }}</small>
     </div>
+
+    <label class="check">
+      <input v-model="form.anonymous" type="checkbox" />
+      Отправить анонимно
+      <small class="hint">имя и e-mail всё равно нужны, но другим они показаны не будут</small>
+    </label>
+    <small v-if="errors.detail" class="err">{{ errors.detail }}</small>
 
     <div class="actions">
       <button type="submit" class="primary" :disabled="busy">Отправить</button>
