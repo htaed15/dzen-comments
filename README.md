@@ -1,96 +1,152 @@
-# Комментарии — SPA (Django + Vue)
+# Комментарии: SPA на Django и Vue
 
-Тестовое задание dZENcode, уровень **Junior+**. Каскадные комментарии с вложениями,
-CAPTCHA, предпросмотром, WebSocket-обновлениями и опциональной JWT-авторизацией.
+Тестовое задание для dZENcode, уровень Junior+.
 
-## Возможности
+Одностраничное приложение, в котором можно оставлять комментарии, отвечать на них (вложенность любая) и прикреплять к сообщению картинку или текстовый файл. Все данные лежат в реляционной базе, вместе с данными о том, кто писал: имя, e-mail, IP и браузер.
 
-- Форма: User Name (латиница/цифры), E-mail, Home page, CAPTCHA (картинка), Text.
-- Разрешённые теги: `<a href title>`, `<code>`, `<i>`, `<strong>`; проверка закрытия и вложенности
-  (клиент + сервер), остальной HTML вырезается (`nh3`, белый список).
-- Каскадные ответы любой глубины; в таблице только заглавные комментарии.
-- Сортировка по User Name, E-mail, дате (↑/↓), по умолчанию LIFO; пагинация по 25.
-- Вложения: JPG/GIF/PNG (пропорциональное уменьшение до 320×240) и TXT до 100 КБ; просмотр в lightbox.
-- Предпросмотр без перезагрузки, панель тегов `[i] [strong] [code] [a]`.
-- Защита: XSS (санитизация на входе + экранирование), SQL-инъекции (только ORM, белый список полей сортировки).
+Демо: _сюда вставить ссылку после деплоя_
 
-### Junior+
+## Что есть в приложении
 
-| Инструмент | Где используется |
-|---|---|
-| Queue (Celery + Redis) | обработка вложений, e-mail автору комментария при ответе |
-| Cache (Redis) | кеш списков (версионный ключ), хранение CAPTCHA с TTL |
-| Events (Django signals) | `post_save` → сброс кеша, задачи Celery, событие WebSocket |
-| JWT (simplejwt) | регистрация/вход; авторизованный пользователь пишет без CAPTCHA |
-| WebSocket (Channels) | новые комментарии у всех клиентов без перезагрузки |
+**Форма**
+- User Name (латиница и цифры), E-mail и текст обязательны, Home page нет.
+- CAPTCHA с картинкой. Ответ хранится на сервере и работает один раз, живёт 5 минут.
+- В тексте можно использовать только `<a href="" title="">`, `<code>`, `<i>`, `<strong>`. Остальной HTML вырезается. Теги должны быть правильно закрыты и вложены, иначе форма вернёт ошибку.
+- Над полем текста есть кнопки `[i]`, `[strong]`, `[code]`, `[a]`, они оборачивают выделенный фрагмент.
+- Предпросмотр работает без перезагрузки страницы и идёт через тот же код очистки, что и сохранение, так что то, что видно в предпросмотре, и сохранится.
+- Валидация есть и в браузере, и на сервере. Серверная главная, клиентская нужна только для удобства.
 
-## Запуск (Docker)
+**Список**
+- Заглавные комментарии (не ответы) идут страницами по 25.
+- Сортировка по User Name, E-mail и дате, в обе стороны. По умолчанию новые сверху (LIFO).
+- Ответы показываются каскадом под своим комментарием, глубина не ограничена.
 
-```bash
+**Файлы**
+- Картинки JPG, GIF, PNG. Всё, что больше 320×240, пропорционально уменьшается.
+- Текстовые файлы только `.txt` и не больше 100 КБ.
+- Просмотр в lightbox: картинка открывается поверх страницы, txt показывается как текст.
+
+**Junior+**
+- Queue: Celery с Redis. Картинки уменьшаются в фоне, пока идёт обработка, у вложения статус «Обработка файла…». Там же уходит письмо автору комментария, когда ему ответили.
+- Cache: Redis. Кешируется список комментариев (ключ зависит от сортировки и страницы), CAPTCHA тоже лежит там.
+- Events: сигналы Django. При создании комментария сигнал сбрасывает кеш, ставит задачи в Celery и отправляет событие по WebSocket.
+- JWT: можно зарегистрироваться и войти. Вошедшему пользователю не нужна CAPTCHA и не нужно вводить имя и e-mail.
+- WebSocket (Django Channels): новый комментарий появляется у всех, кто открыл страницу, без обновления.
+
+## Стек
+
+Backend: Python 3.12, Django, Django REST Framework, Django ORM, Channels (Daphne), Celery, simplejwt, Pillow, nh3 (очистка HTML).
+Frontend: Vue 3 + Vite.
+База: PostgreSQL в Docker, SQLite если запускать без Docker.
+Инфраструктура: Redis, nginx, Docker Compose.
+
+## Как запустить
+
+Нужен Docker.
+
+```
+git clone <ссылка на репозиторий>
+cd dzen-comments
 cp .env.example .env
 docker compose up --build
 ```
 
-Приложение: http://localhost:8080
+На Windows вместо `cp` команда `copy .env.example .env`.
 
-## Локальная разработка без Docker
+После запуска приложение будет на http://localhost:8080. Поднимается пять контейнеров: db, redis, backend, celery и frontend (nginx, он же отдаёт загруженные файлы и проксирует `/api` и `/ws`).
 
-Без `REDIS_URL` и `POSTGRES_HOST` проект работает на SQLite, кеше в памяти, а Celery выполняет
-задачи синхронно.
+Тесты:
 
-```bash
+```
+docker compose run --rm backend python manage.py test comments
+```
+
+Сейчас их 19: санитайзер, создание и ошибки валидации, CAPTCHA, дерево ответов, пагинация и сортировка, загрузка и уменьшение картинки, лимит на txt, JWT. При запуске тестов проект сам переключается на SQLite и кеш в памяти, поэтому Redis и Postgres для них не нужны.
+
+### Без Docker
+
+Если `REDIS_URL` и `POSTGRES_HOST` не заданы, проект работает на SQLite, кеше в памяти, а Celery выполняет задачи сразу в том же процессе. Воркер не нужен.
+
+```
 cd backend
 pip install -r requirements.txt
 python manage.py migrate
-python manage.py runserver        # http://localhost:8000
-python manage.py test comments    # тесты
-
-cd ../frontend
-npm install
-npm run dev                       # http://localhost:5173 (прокси на :8000)
+python manage.py runserver
 ```
+
+и в другом окне
+
+```
+cd frontend
+npm install
+npm run dev
+```
+
+Фронтенд откроется на http://localhost:5173 и сам проксирует запросы на порт 8000.
+
+## Как проверить Junior+
+
+- Queue: загрузить картинку больше 320×240. Сначала у неё будет статус «Обработка файла…», потом появится миниатюра. В логах `docker compose logs celery` видна задача `process_attachment`.
+- Cache: запросить `/api/comments/` два раза подряд, второй раз ответ берётся из Redis. Ключ содержит номер версии, который растёт при каждом новом комментарии, поэтому кеш сбрасывается сам.
+- Events и WebSocket: открыть страницу в двух окнах и отправить комментарий в одном, во втором он появится сам.
+- JWT: нажать «Войти / регистрация», создать аккаунт. После этого форма не просит CAPTCHA.
 
 ## API
 
-| Метод | URL | Назначение |
+| Метод | URL | Что делает |
 |---|---|---|
 | GET | `/api/comments/?ordering=-created_at&page=1` | заглавные комментарии с деревом ответов |
-| POST | `/api/comments/` | создать (multipart: user_name, email, home_page, text, parent, captcha_key, captcha_answer, file) |
-| POST | `/api/comments/preview/` | предпросмотр (тот же санитайзер) |
-| GET | `/api/captcha/` | `{key, image}` |
-| POST | `/api/auth/register/`, `/api/auth/token/`, `/api/auth/token/refresh/` | JWT |
-| WS | `/ws/comments/` | события `comment.created`, `comment.updated` |
+| POST | `/api/comments/` | создать комментарий (multipart, можно с файлом) |
+| POST | `/api/comments/preview/` | предпросмотр текста |
+| GET | `/api/captcha/` | ключ и картинка CAPTCHA |
+| POST | `/api/auth/register/` | регистрация, возвращает токены |
+| POST | `/api/auth/token/` | вход |
+| POST | `/api/auth/token/refresh/` | обновить токен |
+| WS | `/ws/comments/` | события `comment.created` и `comment.updated` |
 
-`ordering`: `user_name`, `email`, `created_at` (с `-` для убывания).
+`ordering` принимает `user_name`, `email`, `created_at`, с минусом в начале для обратного порядка. Любое другое значение игнорируется.
 
-## Структура
+## Защита
+
+- XSS: текст очищается на сервере по белому списку тегов (nh3) до сохранения, ссылки только с http и https. На фронтенде текст выводится только после очистки. Текст из txt-файла показывается как обычный текст, не как HTML.
+- SQL-инъекции: все запросы идут через Django ORM, а поля сортировки берутся из заранее заданного списка.
+- Файлы проверяются по содержимому, а не только по расширению: картинку открывает Pillow, у txt проверяется кодировка UTF-8 и отсутствие нулевых байтов.
+
+## Устройство проекта
 
 ```
-backend/comments/
-  models.py       Author, Comment, Attachment
-  services/       HtmlSanitizer, CaptchaService, AttachmentValidator/Processor
-  signals.py      события -> кеш, Celery, WebSocket
-  tasks.py        Celery-задачи
-  consumers.py    WebSocket
-frontend/src/     Vue 3: App, CommentForm, CommentNode, Lightbox, AuthPanel
-docs/schema.sql   схема для MySQL Workbench
+backend/
+  config/            настройки, asgi, celery
+  comments/
+    models.py        Author, Comment, Attachment
+    services/        очистка HTML, CAPTCHA, проверка и обработка файлов
+    serializers.py   валидация входных данных
+    views.py         API
+    signals.py       события при создании комментария и вложения
+    tasks.py         задачи Celery
+    consumers.py     WebSocket
+    tests/
+frontend/src/        Vue: App, форма, узел комментария, lightbox, вход
+docs/schema.sql      схема БД
 ```
 
-## Схема БД
+### Модель данных
 
 ```mermaid
 erDiagram
-    auth_user ||--o{ comments_author : "user (nullable)"
+    auth_user ||--o{ comments_author : "user (может быть пустым)"
     comments_author ||--o{ comments_comment : "author"
     comments_comment ||--o{ comments_comment : "parent / root"
     comments_comment ||--o{ comments_attachment : "comment"
 ```
 
-`docs/schema.sql` импортируется в MySQL Workbench: *File → Import → Reverse Engineer MySQL Create Script*.
+Автор вынесен в отдельную таблицу, чтобы хранить данные для идентификации (IP, браузер) отдельно от текста. У комментария два поля: `parent` (кому ответили) и `root` (корень ветки). Благодаря `root` страницу из 25 заглавных комментариев со всеми ответами можно загрузить двумя запросами и собрать дерево уже в памяти, без запроса на каждый ответ.
 
-## Частые проблемы
+Файл `docs/schema.sql` в диалекте MySQL, чтобы его открыть в MySQL Workbench: File, New Model, File, Import, Reverse Engineer MySQL Create Script. Реально проект работает на PostgreSQL, структура таблиц та же.
 
-- `docker compose` ругается на `.env` — выполните `copy .env.example .env`.
-- Порт 8080 занят — поменяйте `"8080:80"` в `docker-compose.yml`.
-- Вложение висит в статусе «Обработка файла…» — не запущен контейнер `celery` (`docker compose ps`).
-- Без Docker WebSocket работает на InMemory-слое: все вкладки подключены к одному процессу `runserver`, этого достаточно для проверки.
+## Что можно было бы улучшить
+
+- Нет ограничения частоты запросов, на открытом сервере его стоит добавить.
+- Картинка уменьшается после сохранения и перезаписывает оригинал. Если оригиналы нужны, их надо хранить отдельно.
+- Нет удаления и модерации комментариев.
+- Письмо при ответе по умолчанию уходит в консоль (`console` backend), для настоящей отправки нужны настройки SMTP в `.env`.
