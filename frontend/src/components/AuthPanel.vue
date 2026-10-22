@@ -57,6 +57,11 @@ async function go() {
     errors.value = flattenErrors(e.data)
   }
 }
+function switchMode(m) {
+  mode.value = m
+  errors.value = {}
+  f.username = f.email = f.password = ''
+}
 function logout() {
   setToken('')
   emit('auth', false)
@@ -73,14 +78,30 @@ function logout() {
       <button type="button" @click="open = !open">Войти / регистрация</button>
       <form v-if="open" class="auth-box" @submit.prevent="go">
         <div class="toolbar">
-          <button type="button" :class="{ on: mode === 'login' }" @click="mode = 'login'; errors = {}">Вход</button>
-          <button type="button" :class="{ on: mode === 'register' }" @click="mode = 'register'; errors = {}">Регистрация</button>
+          <button type="button" :class="{ on: mode === 'login' }" @click="switchMode('login')">Вход</button>
+          <button type="button" :class="{ on: mode === 'register' }" @click="switchMode('register')">Регистрация</button>
         </div>
-        <input v-model.trim="f.username" placeholder="User Name (латиница, цифры)" />
-        <input v-if="mode === 'register'" v-model.trim="f.email" type="email" placeholder="E-mail" />
         <input
+          :key="mode + '-username'"
+          v-model.trim="f.username"
+          name="username"
+          :autocomplete="mode === 'login' ? 'username' : 'off'"
+          placeholder="User Name (латиница, цифры)"
+        />
+        <input
+          v-if="mode === 'register'"
+          v-model.trim="f.email"
+          name="email"
+          type="email"
+          autocomplete="email"
+          placeholder="E-mail"
+        />
+        <input
+          :key="mode + '-password'"
           v-model="f.password"
+          name="password"
           type="password"
+          :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
           :placeholder="mode === 'register' ? 'Пароль (от 6 символов, буквы и цифры)' : 'Пароль'"
         />
         <small v-for="(msg, key) in errors" :key="key" class="err">{{ msg }}</small>
