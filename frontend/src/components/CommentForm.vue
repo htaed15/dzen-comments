@@ -171,7 +171,7 @@ async function submit() {
       <button type="button" @click="wrap('code')">[code]</button>
       <button type="button" @click="wrap('a')">[a]</button>
     </div>
-    <textarea ref="textarea" v-model="form.text" rows="4" placeholder="Текст сообщения *" />
+    <textarea ref="textarea" v-model="form.text" rows="4" maxlength="5000" placeholder="Текст сообщения *" />
     <small v-if="errors.text" class="err">{{ errors.text }}</small>
 
     <div class="row">
