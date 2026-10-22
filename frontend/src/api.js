@@ -7,10 +7,17 @@ export function setToken(value) {
 }
 export const getToken = () => token
 
-async function request(url, options = {}) {
+async function request(url, options = {}, retried = false) {
   const headers = { ...(options.headers || {}) }
   if (token) headers.Authorization = `Bearer ${token}`
   const resp = await fetch(url, { ...options, headers })
+  // Просроченный/битый токен: DRF отвечает 401 даже на публичных эндпоинтах.
+  // Сбрасываем токен и повторяем запрос как анонимный.
+  if (resp.status === 401 && token && !retried) {
+    setToken('')
+    window.dispatchEvent(new Event('auth-expired'))
+    return request(url, options, true)
+  }
   const data = await resp.json().catch(() => ({}))
   if (!resp.ok) {
     const err = new Error('request failed')

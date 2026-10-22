@@ -78,4 +78,19 @@ docs/schema.sql   схема для MySQL Workbench
 
 ## Схема БД
 
+```mermaid
+erDiagram
+    auth_user ||--o{ comments_author : "user (nullable)"
+    comments_author ||--o{ comments_comment : "author"
+    comments_comment ||--o{ comments_comment : "parent / root"
+    comments_comment ||--o{ comments_attachment : "comment"
+```
+
 `docs/schema.sql` импортируется в MySQL Workbench: *File → Import → Reverse Engineer MySQL Create Script*.
+
+## Частые проблемы
+
+- `docker compose` ругается на `.env` — выполните `copy .env.example .env`.
+- Порт 8080 занят — поменяйте `"8080:80"` в `docker-compose.yml`.
+- Вложение висит в статусе «Обработка файла…» — не запущен контейнер `celery` (`docker compose ps`).
+- Без Docker WebSocket работает на InMemory-слое: все вкладки подключены к одному процессу `runserver`, этого достаточно для проверки.
