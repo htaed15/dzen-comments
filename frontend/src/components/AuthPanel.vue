@@ -1,6 +1,6 @@
 <script setup>
 import { reactive, ref, watch } from 'vue'
-import { api, flattenErrors, setToken } from '../api'
+import { api, flattenErrors, setToken, setTokens } from '../api'
 
 const props = defineProps({ authed: Boolean })
 const emit = defineEmits(['auth'])
@@ -49,7 +49,7 @@ async function go() {
       const body = { username: f.username, email: f.email, password: f.password, home_page: home }
       data = await api.register(body)
     }
-    setToken(data.access)
+    setTokens(data.access, data.refresh)
     open.value = false
     f.password = ''
     emit('auth', true)

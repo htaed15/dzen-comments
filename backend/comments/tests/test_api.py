@@ -287,6 +287,18 @@ class IdentityTests(BaseApiTest):
         self.post(self.payload(user_name="Mike2"))  # e-mail занят
         self.assertEqual(Profile.objects.count(), 1)
 
+    def test_refresh_token_gives_new_access(self):
+        data = self.register().json()
+        resp = self.client.post("/api/auth/token/refresh/", {"refresh": data["refresh"]}, format="json")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertIn("access", resp.json())
+        me = self.client.get("/api/auth/me/", HTTP_AUTHORIZATION=f"Bearer {resp.json()['access']}")
+        self.assertEqual(me.status_code, 200)
+
+    def test_bad_refresh_token_rejected(self):
+        resp = self.client.post("/api/auth/token/refresh/", {"refresh": "garbage"}, format="json")
+        self.assertEqual(resp.status_code, 401)
+
     def test_guest_cannot_use_registered_username(self):
         self.assertEqual(self.register().status_code, 201)
         resp = self.post(self.payload(user_name="alice1", email="alice@example.com"))
