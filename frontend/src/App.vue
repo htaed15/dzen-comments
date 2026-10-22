@@ -1,6 +1,8 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { api, getToken } from './api'
+import { fmtDate } from './utils'
+import Avatar from './components/Avatar.vue'
 import AuthPanel from './components/AuthPanel.vue'
 import CommentForm from './components/CommentForm.vue'
 import CommentNode from './components/CommentNode.vue'
@@ -47,6 +49,9 @@ function sortBy(field) {
 }
 const arrow = (field) =>
   ordering.value === field ? '↑' : ordering.value === `-${field}` ? '↓' : ''
+
+const ariaSort = (field) =>
+  ordering.value === field ? 'ascending' : ordering.value === `-${field}` ? 'descending' : 'none'
 
 function go(p) {
   page.value = Math.min(Math.max(1, p), data.value.total_pages)
@@ -117,27 +122,55 @@ function created() {
       </section>
 
       <section class="card">
-        <div class="sortbar">
-          <span>Сортировка:</span>
-          <button type="button" @click="sortBy('user_name')">User Name {{ arrow('user_name') }}</button>
-          <button type="button" @click="sortBy('email')">E-mail {{ arrow('email') }}</button>
-          <button type="button" @click="sortBy('created_at')">Дата {{ arrow('created_at') }}</button>
-          <span class="hint">Всего: {{ data.count }}</span>
-        </div>
+        <div class="sortbar"><span class="hint">Всего: {{ data.count }}</span></div>
 
         <p v-if="liveNote" class="note">{{ liveNote }}</p>
         <p v-if="loading && !data.results.length" class="hint">Загрузка…</p>
         <p v-else-if="!data.results.length" class="hint">Пока нет комментариев. Напишите первый.</p>
 
-        <CommentNode
-          v-for="c in data.results"
-          :key="c.id"
-          :comment="c"
-          :authed="authed"
-          @changed="load"
-          @open-image="lightImage = $event"
-          @open-text="lightText = $event"
-        />
+        <table v-if="data.results.length" class="ctable">
+          <thead>
+            <tr>
+              <th :aria-sort="ariaSort('user_name')">
+                <button type="button" @click="sortBy('user_name')">User Name {{ arrow('user_name') }}</button>
+              </th>
+              <th :aria-sort="ariaSort('email')">
+                <button type="button" @click="sortBy('email')">E-mail {{ arrow('email') }}</button>
+              </th>
+              <th :aria-sort="ariaSort('created_at')">
+                <button type="button" @click="sortBy('created_at')">Дата {{ arrow('created_at') }}</button>
+              </th>
+            </tr>
+          </thead>
+          <tbody v-for="c in data.results" :key="c.id">
+            <tr class="meta">
+              <td>
+               <div class="who">
+                <Avatar :name="c.user_name" :anonymous="c.is_anonymous" />
+                <a v-if="c.profile" class="name" :href="'#/u/' + encodeURIComponent(c.profile)">{{ c.user_name }}</a>
+                <b v-else class="name anon">{{ c.user_name }}</b>
+                <a v-if="c.home_page" class="site" :href="c.home_page" rel="nofollow noopener" target="_blank">{{ c.home_page }}</a>
+               </div>
+              </td>
+              <td class="mail">{{ c.email || '—' }}</td>
+              <td class="when-cell">
+                <a class="when" :href="'#/c/' + c.id" title="Ссылка на комментарий">{{ fmtDate(c.created_at) }}</a>
+              </td>
+            </tr>
+            <tr class="content">
+              <td colspan="3">
+                <CommentNode
+                  bare
+                  :comment="c"
+                  :authed="authed"
+                  @changed="load"
+                  @open-image="lightImage = $event"
+                  @open-text="lightText = $event"
+                />
+              </td>
+            </tr>
+          </tbody>
+        </table>
 
         <nav v-if="data.total_pages > 1" class="pager">
           <button type="button" :disabled="page === 1" @click="go(page - 1)">←</button>

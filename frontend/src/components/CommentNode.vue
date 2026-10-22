@@ -9,6 +9,7 @@ const props = defineProps({
   authed: Boolean,
   depth: { type: Number, default: 0 },
   focus: { type: Number, default: null },
+  bare: Boolean, // корневой комментарий в таблице: шапку рисует сама таблица
 })
 const emit = defineEmits(['changed', 'open-image', 'open-text'])
 const replying = ref(false)
@@ -32,10 +33,10 @@ onMounted(() => {
     :id="'comment-' + comment.id"
     ref="el"
     class="comment"
-    :class="{ focused: focus === comment.id }"
+    :class="{ focused: focus === comment.id, bare }"
     :style="{ '--depth': Math.min(depth, 6) }"
   >
-    <header>
+    <header v-if="!bare">
       <Avatar :name="comment.user_name" :anonymous="comment.is_anonymous" />
       <a v-if="comment.profile" class="name" :href="'#/u/' + encodeURIComponent(comment.profile)">
         {{ comment.user_name }}
