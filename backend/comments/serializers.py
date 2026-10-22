@@ -81,7 +81,7 @@ class CommentSerializer(serializers.ModelSerializer):
         return "" if obj.is_anonymous else mask_email(obj.profile.email)
 
     def get_home_page(self, obj):
-        return "" if obj.is_anonymous else obj.profile.home_page
+        return "" if (obj.is_anonymous or not obj.show_home_page) else obj.profile.home_page
 
     def get_replies(self, obj):
         # children заполняется в views.build_tree (без запросов в цикле)
@@ -130,6 +130,7 @@ class CommentCreateSerializer(serializers.Serializer):
         queryset=Comment.objects.all(), required=False, allow_null=True
     )
     anonymous = serializers.BooleanField(required=False, default=False)
+    show_home_page = serializers.BooleanField(required=False, default=True)
     captcha_key = serializers.CharField(required=False, allow_blank=True)
     captcha_answer = serializers.CharField(required=False, allow_blank=True)
     file = serializers.FileField(required=False)
@@ -186,6 +187,7 @@ class CommentCreateSerializer(serializers.Serializer):
             root=(parent.root or parent) if parent else None,
             text=validated["text"],
             is_anonymous=validated.get("anonymous", False),
+            show_home_page=validated.get("show_home_page", True),
             ip_address=self.context["ip"],
             user_agent=request.META.get("HTTP_USER_AGENT", "")[:300],
         )

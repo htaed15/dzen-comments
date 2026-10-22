@@ -13,6 +13,7 @@ const form = reactive({
   text: '',
   captcha_answer: '',
   anonymous: false,
+  show_home_page: true,
 })
 const file = ref(null)
 const errors = ref({})
@@ -109,6 +110,7 @@ async function submit() {
     body.append('email', form.email)
     if (form.home_page) body.append('home_page', form.home_page)
   }
+  body.append('show_home_page', form.show_home_page ? 'true' : 'false')
   body.append('anonymous', form.anonymous ? 'true' : 'false')
   body.append('captcha_key', captcha.key)
   body.append('captcha_answer', form.captcha_answer)
@@ -154,6 +156,10 @@ async function submit() {
         Home page
         <input v-model.trim="form.home_page" placeholder="https://" :readonly="authed" :class="{ locked: authed }" />
         <small v-if="errors.home_page" class="err">{{ errors.home_page }}</small>
+      </label>
+      <label class="check">
+        <input v-model="form.show_home_page" type="checkbox" />
+        Показывать Home page
       </label>
     </div>
     <small v-if="authed" class="hint">Поля заполнены из вашего профиля</small>

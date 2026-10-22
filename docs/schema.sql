@@ -36,6 +36,7 @@ CREATE TABLE comments_comment (
   parent_id     BIGINT NULL,                   -- кому ответили
   root_id       BIGINT NULL,                   -- корень ветки
   text          TEXT NOT NULL,
+  show_home_page TINYINT(1) NOT NULL DEFAULT 1, -- показывать ли Home page рядом с комментарием
   is_anonymous  TINYINT(1) NOT NULL DEFAULT 0, -- автор известен системе, но скрыт публично
   ip_address    VARCHAR(45)  NOT NULL,         -- данные для идентификации клиента
   user_agent    VARCHAR(300) NOT NULL DEFAULT '',
