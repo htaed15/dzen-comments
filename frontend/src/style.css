@@ -137,3 +137,10 @@ input.locked { background: var(--head); color: var(--muted); }
   .ctable thead th:last-child { text-align: left; }
   .ctable .when-cell { text-align: left; }
 }
+
+/* Lightbox: фон плавно темнеет, окно с картинкой «вырастает» из центра */
+.lb-enter-active, .lb-leave-active { transition: opacity .25s ease; }
+.lb-enter-active .lightbox-box, .lb-leave-active .lightbox-box { transition: transform .3s cubic-bezier(.2, .8, .2, 1), opacity .25s ease; }
+.lb-enter-from, .lb-leave-to { opacity: 0; }
+.lb-enter-from .lightbox-box { transform: scale(.55); opacity: 0; }
+.lb-leave-to .lightbox-box { transform: scale(.9); opacity: 0; }
