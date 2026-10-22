@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { api, flattenErrors, getToken } from '../api'
 import { validateFile, validateForm } from '../validators'
 
@@ -24,6 +24,8 @@ async function loadCaptcha() {
   form.captcha_answer = ''
 }
 onMounted(() => { if (showIdentity.value) loadCaptcha() })
+// после выхода из аккаунта форма снова просит имя и CAPTCHA
+watch(showIdentity, (visible) => { if (visible) loadCaptcha() })
 
 // Панель тегов: оборачивает выделенный текст
 function wrap(tag) {

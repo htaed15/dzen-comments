@@ -12,6 +12,7 @@ INSTALLED_APPS = [
     "daphne",
     "django.contrib.auth",
     "django.contrib.contenttypes",
+    "django.contrib.staticfiles",
     "rest_framework",
     "channels",
     "comments.apps.CommentsConfig",
@@ -82,6 +83,8 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {"ACCESS_TOKEN_LIFETIME": timedelta(hours=12)}
 
 # --- Файлы ---
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", BASE_DIR / "media"))
 

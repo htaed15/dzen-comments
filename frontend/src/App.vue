@@ -51,11 +51,14 @@ function connect() {
   }
   ws.onclose = () => (retry = setTimeout(connect, 3000))
 }
+const onExpired = () => (authed.value = false)
 onMounted(() => {
+  window.addEventListener('auth-expired', onExpired)
   load()
   connect()
 })
 onBeforeUnmount(() => {
+  window.removeEventListener('auth-expired', onExpired)
   clearTimeout(retry)
   if (ws) {
     ws.onclose = null
