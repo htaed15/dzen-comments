@@ -239,6 +239,24 @@ class CommentApiTests(BaseApiTest):
             self.assertEqual(img.n_frames, 3)
             self.assertEqual(img.size, (320, 160))  # пропорции сохранены
 
+    def test_decompression_bomb_rejected(self):
+        buf = io.BytesIO()
+        Image.new("1", (6000, 6000)).save(buf, "PNG")  # мало байт, 36 млн пикселей
+        upload = SimpleUploadedFile("bomb.png", buf.getvalue(), content_type="image/png")
+        resp = self.post(self.payload(file=upload))
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("file", resp.json())
+
+    def test_html_disguised_as_image_rejected(self):
+        upload = SimpleUploadedFile("x.png", b"<html><script>alert(1)</script></html>", content_type="image/png")
+        resp = self.post(self.payload(file=upload))
+        self.assertEqual(resp.status_code, 400)
+
+    def test_svg_rejected(self):
+        upload = SimpleUploadedFile("x.svg", b"<svg onload=alert(1)></svg>", content_type="image/svg+xml")
+        resp = self.post(self.payload(file=upload))
+        self.assertEqual(resp.status_code, 400)
+
     def test_text_file_too_large(self):
         upload = SimpleUploadedFile("big.txt", b"a" * (101 * 1024), content_type="text/plain")
         resp = self.post(self.payload(file=upload))
@@ -462,3 +480,96 @@ class ProfilePageTests(BaseApiTest):
 
     def test_thread_not_found(self):
         self.assertEqual(self.client.get("/api/comments/99999/thread/").status_code, 404)
+
+
+class InjectionTests(BaseApiTest):
+    """XSS и SQL-инъекции: вредоносный ввод не должен ни исполняться, ни ломать запросы."""
+
+    XSS = [
+        "<script>alert(1)</script>",
+        "<img src=x onerror=alert(1)>",
+        "<svg onload=alert(1)>",
+        "<iframe src=javascript:alert(1)></iframe>",
+        "<scr<script>ipt>alert(1)</scr</script>ipt>",
+        "<i <script>alert(1)</script>>x</i>",
+        "<a href=\"javascript:alert(1)\">x</a>",
+        "<a href=\"data:text/html,<script>alert(1)</script>\">x</a>",
+        "<a href=\"http://x.com\" onclick=\"alert(1)\">x</a>",
+        "<a href=\"http://x.com\" title=\"a\"onmouseover=\"alert(1)\">x</a>",
+        "<strong style=\"x:expression(alert(1))\">x</strong>",
+        "<body onload=alert(1)>",
+        "<math><mtext><script>alert(1)</script></mtext></math>",
+        "&lt;script&gt;alert(1)&lt;/script&gt;",
+    ]
+
+    def stored_text_for(self, text):
+        resp = self.post(self.payload(text=text))
+        if resp.status_code != 201:
+            return None  # отклонено проверкой — это тоже безопасный исход
+        return self.client.get("/api/comments/").json()["results"][0]["text"].lower()
+
+    def test_xss_payloads_never_survive(self):
+        for payload in self.XSS:
+            Comment.objects.all().delete()
+            out = self.stored_text_for(payload)
+            if out is None:
+                continue
+            for bad in ("<script", "<img", "<svg", "<iframe", "<body", "onerror", "onload", "onclick",
+                        "onmouseover", "javascript:", "data:text", "expression("):
+                self.assertNotIn(bad, out, msg=f"{payload!r} -> {out!r}")
+
+    def test_xss_in_preview(self):
+        for payload in self.XSS:
+            resp = self.client.post("/api/comments/preview/", {"text": payload}, format="json")
+            if resp.status_code == 200:
+                html = resp.json()["html"].lower()
+                for bad in ("<script", "<img", "<svg", "<iframe", "onerror", "onload", "javascript:"):
+                    self.assertNotIn(bad, html, msg=f"{payload!r} -> {html!r}")
+
+    def test_xss_in_identity_fields_rejected(self):
+        for field, value in (
+            ("user_name", "<script>alert(1)</script>"),
+            ("email", "a@b.c<script>"),
+            ("home_page", "javascript:alert(1)"),
+            ("home_page", "data:text/html,<script>alert(1)</script>"),
+            ("home_page", "ftp://example.com"),
+        ):
+            resp = self.post(self.payload(**{field: value}))
+            self.assertEqual(resp.status_code, 400, msg=f"{field}={value!r}")
+        self.assertEqual(Comment.objects.count(), 0)
+
+    def test_sql_injection_in_fields_is_harmless(self):
+        for value in ("x'; DROP TABLE comments_comment;--", "' OR '1'='1", "1; SELECT pg_sleep(5)"):
+            resp = self.post(self.payload(user_name=value))
+            self.assertEqual(resp.status_code, 400, msg=value)
+        self.assertEqual(Comment.objects.count(), 0)
+
+    def test_sql_injection_in_text_is_stored_as_plain_text(self):
+        payload = "Robert'); DROP TABLE comments_comment;-- \" OR 1=1"
+        resp = self.post(self.payload(text=payload))
+        self.assertEqual(resp.status_code, 201, resp.content)
+        self.assertEqual(Comment.objects.count(), 1)  # таблица на месте
+        self.assertIn("DROP TABLE", Comment.objects.get().text)
+
+    def test_sql_injection_in_ordering_and_page(self):
+        self.post(self.payload())
+        for ordering in ("created_at; DROP TABLE comments_comment", "-id) OR 1=1 --", "user_name,(SELECT 1)", "email desc"):
+            resp = self.client.get("/api/comments/", {"ordering": ordering})
+            self.assertEqual(resp.status_code, 200, msg=ordering)
+        resp = self.client.get("/api/comments/", {"page": "1; DROP TABLE x"})
+        self.assertIn(resp.status_code, (200, 404))
+        self.assertEqual(Comment.objects.count(), 1)
+
+    def test_sql_injection_in_url_parameters(self):
+        self.post(self.payload())
+        for path in ("/api/users/x'%20OR%20'1'='1/", "/api/users/john1'--/", "/api/comments/1%20OR%201=1/thread/"):
+            resp = self.client.get(path)
+            self.assertIn(resp.status_code, (400, 404), msg=path)
+        self.assertEqual(Comment.objects.count(), 1)
+
+    def test_sql_injection_in_login(self):
+        self.register()
+        resp = self.client.post(
+            "/api/auth/token/", {"username": "alice1' OR '1'='1", "password": "x' OR '1'='1"}, format="json"
+        )
+        self.assertEqual(resp.status_code, 401)

@@ -14,6 +14,7 @@ class AttachmentValidator:
     IMAGE_FORMATS = {"JPEG", "GIF", "PNG"}
     MAX_IMAGE_BYTES = 5 * 1024 * 1024
     MAX_TEXT_BYTES = 100 * 1024
+    MAX_PIXELS = 25_000_000  # защита от «бомб»: маленький файл, который разворачивается в огромную картинку
 
     def validate(self, uploaded) -> str:
         """Возвращает вид вложения: 'image' или 'text'."""
@@ -33,7 +34,11 @@ class AttachmentValidator:
         try:
             with Image.open(uploaded) as img:
                 fmt = img.format
+                if img.width * img.height > self.MAX_PIXELS:
+                    raise AttachmentError("Изображение слишком большое по размерам")
                 img.verify()
+        except AttachmentError:
+            raise
         except Exception:
             raise AttachmentError("Файл не является корректным изображением")
         finally:
