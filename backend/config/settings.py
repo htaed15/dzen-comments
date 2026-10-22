@@ -1,4 +1,5 @@
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 
@@ -26,8 +27,11 @@ MIDDLEWARE = [
 ROOT_URLCONF = "config.urls"
 ASGI_APPLICATION = "config.asgi.application"
 
+# При запуске тестов не трогаем внешние сервисы: SQLite/кеш в памяти/синхронный Celery.
+TESTING = "test" in sys.argv
+
 # --- База данных: PostgreSQL в Docker, SQLite для быстрого локального запуска ---
-if os.getenv("POSTGRES_HOST"):
+if os.getenv("POSTGRES_HOST") and not TESTING:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
@@ -47,7 +51,7 @@ else:
     }
 
 # --- Redis: кеш, каналы WebSocket, брокер Celery. Без REDIS_URL всё работает в памяти ---
-REDIS_URL = os.getenv("REDIS_URL", "")
+REDIS_URL = "" if TESTING else os.getenv("REDIS_URL", "")
 
 if REDIS_URL:
     CACHES = {
