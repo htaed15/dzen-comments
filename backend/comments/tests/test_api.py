@@ -176,3 +176,29 @@ class ApiTests(TestCase):
         resp = self.post({"text": "no captcha needed"})
         self.assertEqual(resp.status_code, 201, resp.content)
         self.assertEqual(resp.json()["user_name"], "alice1")
+
+    def register(self, password):
+        return self.client.post(
+            "/api/auth/register/",
+            {"username": "bob77", "email": "bob@example.com", "password": password},
+            format="json",
+        )
+
+    def test_password_too_short(self):
+        resp = self.register("ab12")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("password", resp.json())
+
+    def test_password_without_digits(self):
+        resp = self.register("onlyletters")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("password", resp.json())
+
+    def test_password_without_letters(self):
+        resp = self.register("123456789")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("password", resp.json())
+
+    def test_password_minimum_valid(self):
+        resp = self.register("abc123")
+        self.assertEqual(resp.status_code, 201, resp.content)
