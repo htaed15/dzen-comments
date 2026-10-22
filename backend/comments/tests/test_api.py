@@ -226,6 +226,19 @@ class CommentApiTests(BaseApiTest):
             self.assertLessEqual(img.width, 320)
             self.assertLessEqual(img.height, 240)
 
+    def test_animated_gif_keeps_frames_when_resized(self):
+        frames = [Image.new("RGB", (800, 400), c) for c in ("red", "green", "blue")]
+        buf = io.BytesIO()
+        frames[0].save(buf, "GIF", save_all=True, append_images=frames[1:], duration=100, loop=0)
+        upload = SimpleUploadedFile("anim.gif", buf.getvalue(), content_type="image/gif")
+        resp = self.post(self.payload(file=upload))
+        self.assertEqual(resp.status_code, 201, resp.content)
+        att = Attachment.objects.get()
+        att.refresh_from_db()
+        with Image.open(att.file.path) as img:
+            self.assertEqual(img.n_frames, 3)
+            self.assertEqual(img.size, (320, 160))  # пропорции сохранены
+
     def test_text_file_too_large(self):
         upload = SimpleUploadedFile("big.txt", b"a" * (101 * 1024), content_type="text/plain")
         resp = self.post(self.payload(file=upload))

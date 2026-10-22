@@ -1,6 +1,6 @@
 import os
 
-from PIL import Image
+from PIL import Image, ImageSequence
 
 
 class AttachmentError(ValueError):
@@ -69,8 +69,29 @@ class AttachmentProcessor:
             fmt = img.format
             if img.width <= self.MAX_SIZE[0] and img.height <= self.MAX_SIZE[1]:
                 return
+            if fmt == "GIF" and getattr(img, "n_frames", 1) > 1:
+                self._resize_animated_gif(img, path)
+                return
             img.load()
             resized = img.copy()
         resized.thumbnail(self.MAX_SIZE, Image.LANCZOS)  # сохраняет пропорции
         save_kwargs = {"quality": 90} if fmt == "JPEG" else {}
         resized.save(path, format=fmt, **save_kwargs)
+
+    def _resize_animated_gif(self, img, path: str) -> None:
+        """Уменьшает каждый кадр анимации, сохраняя задержки и повтор."""
+        frames, durations = [], []
+        for frame in ImageSequence.Iterator(img):
+            durations.append(frame.info.get("duration", 100))
+            small = frame.convert("RGBA")
+            small.thumbnail(self.MAX_SIZE, Image.LANCZOS)
+            frames.append(small)
+        frames[0].save(
+            path,
+            format="GIF",
+            save_all=True,
+            append_images=frames[1:],
+            duration=durations,
+            loop=img.info.get("loop", 0),
+            disposal=2,
+        )

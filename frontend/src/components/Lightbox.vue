@@ -22,7 +22,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
-  <transition name="fade">
+  <transition name="lb">
     <div v-if="image || textFile" class="lightbox" @click.self="emit('close')">
       <div class="lightbox-box">
         <button type="button" class="close" aria-label="Закрыть" @click="emit('close')">×</button>
