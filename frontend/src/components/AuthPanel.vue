@@ -7,7 +7,7 @@ const emit = defineEmits(['auth'])
 
 const open = ref(false)
 const mode = ref('login')
-const f = reactive({ username: '', email: '', home_page: '', password: '' })
+const f = reactive({ username: '', email: '', password: '' })
 const errors = ref({})
 const myName = ref('')
 
@@ -44,8 +44,9 @@ async function go() {
     if (mode.value === 'login') {
       data = await api.login({ username: f.username, password: f.password })
     } else {
-      const body = { username: f.username, email: f.email, password: f.password }
-      if (f.home_page) body.home_page = f.home_page
+      // Home page создаётся при регистрации автоматически — это ссылка на профиль
+      const home = `${location.origin}/#/u/${encodeURIComponent(f.username)}`
+      const body = { username: f.username, email: f.email, password: f.password, home_page: home }
       data = await api.register(body)
     }
     setToken(data.access)
@@ -72,12 +73,11 @@ function logout() {
       <button type="button" @click="open = !open">Войти / регистрация</button>
       <form v-if="open" class="auth-box" @submit.prevent="go">
         <div class="toolbar">
-          <button type="button" :class="{ on: mode === 'login' }" @click="mode = 'login'">Вход</button>
-          <button type="button" :class="{ on: mode === 'register' }" @click="mode = 'register'">Регистрация</button>
+          <button type="button" :class="{ on: mode === 'login' }" @click="mode = 'login'; errors = {}">Вход</button>
+          <button type="button" :class="{ on: mode === 'register' }" @click="mode = 'register'; errors = {}">Регистрация</button>
         </div>
         <input v-model.trim="f.username" placeholder="User Name (латиница, цифры)" />
         <input v-if="mode === 'register'" v-model.trim="f.email" type="email" placeholder="E-mail" />
-        <input v-if="mode === 'register'" v-model.trim="f.home_page" placeholder="Home page (необязательно)" />
         <input
           v-model="f.password"
           type="password"
