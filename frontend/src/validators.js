@@ -69,6 +69,7 @@ export function validateForm(f, { authed }) {
   if (!f.captcha_answer) e.captcha_answer = 'Введите символы с картинки'
   else if (!/^[A-Za-z0-9]+$/.test(f.captcha_answer)) e.captcha_answer = 'Только латинские буквы и цифры'
   if (!f.text.trim()) e.text = 'Обязательное поле'
+  else if (f.text.length > 5000) e.text = 'Сообщение длиннее 5000 символов'
   else {
     const tagError = checkTags(f.text)
     if (tagError) e.text = tagError

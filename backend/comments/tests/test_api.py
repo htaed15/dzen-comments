@@ -462,8 +462,13 @@ class ProfilePageTests(BaseApiTest):
     def test_profile_created_by_first_post(self):
         self.post(self.payload(home_page="https://john.example.com"))
         data = self.client.get("/api/users/John1/").json()
-        self.assertEqual(data["profile"]["home_page"], "https://john.example.com")
+        self.assertEqual(data["profile"]["home_page"], "")  # у гостя Home page на профиле не раскрывается
         self.assertFalse(data["profile"]["registered"])
+
+    def test_guest_profile_does_not_reveal_hidden_home_page(self):
+        self.post(self.payload(home_page="https://secret.example.com", show_home_page="false"))
+        data = self.client.get("/api/users/John1/").json()
+        self.assertEqual(data["profile"]["home_page"], "")
 
     def test_profile_not_found(self):
         self.assertEqual(self.client.get("/api/users/nobody/").status_code, 404)

@@ -224,7 +224,8 @@ class ProfileView(APIView):
         response = paginator.get_paginated_response(ProfileCommentSerializer(page, many=True).data)
         response.data["profile"] = {
             "username": profile.username,
-            "home_page": profile.home_page,
+            # у гостя Home page публично не раскрываем: он мог скрыть его в комментариях
+            "home_page": profile.home_page if profile.is_registered else "",
             "registered": profile.is_registered,
             "joined": profile.created_at,
         }
