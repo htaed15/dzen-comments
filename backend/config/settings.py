@@ -84,7 +84,10 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
 }
-SIMPLE_JWT = {"ACCESS_TOKEN_LIFETIME": timedelta(hours=12)}
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=1),  # короткий access, фронтенд обновляет его по refresh
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+}
 
 # --- Файлы ---
 STATIC_URL = "/static/"
