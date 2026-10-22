@@ -263,6 +263,18 @@ class IdentityTests(BaseApiTest):
         self.assertEqual(item["home_page"], "")
         self.assertTrue(Comment.objects.get().is_anonymous)  # автор системе известен
 
+    def test_home_page_can_be_hidden(self):
+        resp = self.post(self.payload(home_page="https://example.com", show_home_page="false"))
+        self.assertEqual(resp.status_code, 201, resp.content)
+        item = self.client.get("/api/comments/").json()["results"][0]
+        self.assertEqual(item["home_page"], "")
+        self.assertEqual(item["user_name"], "John1")
+
+    def test_home_page_shown_by_default(self):
+        self.post(self.payload(home_page="https://example.com"))
+        item = self.client.get("/api/comments/").json()["results"][0]
+        self.assertEqual(item["home_page"], "https://example.com")
+
     def test_anonymous_still_requires_fields(self):
         resp = self.post({"text": "hi", "anonymous": "true", **self.captcha_fields()})
         self.assertEqual(resp.status_code, 400)

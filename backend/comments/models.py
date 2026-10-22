@@ -58,6 +58,7 @@ class Comment(models.Model):
     text = models.TextField()  # уже очищенный HTML
     # Анонимный комментарий: автор известен системе, но публично скрыт.
     is_anonymous = models.BooleanField(default=False)
+    show_home_page = models.BooleanField(default=True)
     # Данные, по которым можно идентифицировать клиента.
     ip_address = models.GenericIPAddressField()
     user_agent = models.CharField(max_length=300, blank=True)
