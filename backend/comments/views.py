@@ -114,6 +114,7 @@ class CommentPagination(PageNumberPagination):
 
 class CommentViewSet(viewsets.GenericViewSet):
     pagination_class = CommentPagination
+    lookup_value_regex = r"\d+"  # id только числом: всё остальное сразу 404, а не ошибка в запросе
 
     def list(self, request):
         ordering = normalize_ordering(request.query_params.get("ordering"))
