@@ -1,7 +1,6 @@
 import os
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.password_validation import validate_password
 from django.core.validators import RegexValidator
 from django.db import transaction
 from rest_framework import serializers
@@ -13,6 +12,7 @@ from .services.sanitizer import HtmlSanitizer, HtmlValidationError
 
 USERNAME_VALIDATOR = RegexValidator(r"^[A-Za-z0-9]+$", "Только латинские буквы и цифры")
 MAX_TEXT_LENGTH = 5000
+PASSWORD_MIN_LENGTH = 6
 
 
 def sanitize_text(value: str) -> str:
@@ -140,7 +140,11 @@ class CommentCreateSerializer(serializers.Serializer):
 class RegisterSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=30, validators=[USERNAME_VALIDATOR])
     email = serializers.EmailField()
-    password = serializers.CharField(write_only=True, min_length=8)
+    password = serializers.CharField(
+        write_only=True,
+        min_length=PASSWORD_MIN_LENGTH,
+        error_messages={"min_length": f"Пароль должен быть не короче {PASSWORD_MIN_LENGTH} символов"},
+    )
 
     def validate_username(self, value):
         if get_user_model().objects.filter(username__iexact=value).exists():
@@ -148,7 +152,8 @@ class RegisterSerializer(serializers.Serializer):
         return value
 
     def validate_password(self, value):
-        validate_password(value)
+        if not any(ch.isalpha() for ch in value) or not any(ch.isdigit() for ch in value):
+            raise serializers.ValidationError("Пароль должен содержать и буквы, и цифры")
         return value
 
     def create(self, validated):
