@@ -67,7 +67,7 @@
 
 - [x] Тесты проходят (72)
 - [x] Проверка по README: сборка и запуск через Docker работают
-- [ ] Файл схемы БД для MySQL Workbench (`.mwb`, сделать из `docs/schema.sql`)
+- [x] Файл схемы БД для MySQL Workbench (`docs/schema.mwb`, сделан импортом из `docs/schema.sql`)
 - [x] Репозиторий на GitHub
 - [ ] Развёрнуто на хостинге или VDS, ссылка в README
 - [ ] Видео работы приложения
