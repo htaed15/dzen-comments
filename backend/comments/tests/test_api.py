@@ -333,6 +333,17 @@ class IdentityTests(BaseApiTest):
         self.assertEqual(item["home_page"], "")
         self.assertTrue(Comment.objects.get().is_anonymous)  # автор системе известен
 
+    def test_text_without_visible_content_rejected(self):
+        for text in ("<i></i>", '<a href="http://x.com"></a>', "<strong> </strong>", "<code>&nbsp;</code>"):
+            resp = self.post(self.payload(text=text))
+            self.assertEqual(resp.status_code, 400, msg=text)
+            self.assertIn("text", resp.json())
+        self.assertEqual(Comment.objects.count(), 0)
+
+    def test_link_with_text_accepted(self):
+        resp = self.post(self.payload(text='<a href="http://x.com">site</a>'))
+        self.assertEqual(resp.status_code, 201, resp.content)
+
     def test_home_page_can_be_hidden(self):
         resp = self.post(self.payload(home_page="https://example.com", show_home_page="false"))
         self.assertEqual(resp.status_code, 201, resp.content)

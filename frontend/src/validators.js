@@ -73,6 +73,9 @@ export function validateForm(f, { authed }) {
   else {
     const tagError = checkTags(f.text)
     if (tagError) e.text = tagError
+    else if (!f.text.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim()) {
+      e.text = 'В сообщении нет текста: внутри тегов должен быть текст'
+    }
   }
   return e
 }

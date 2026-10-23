@@ -57,13 +57,15 @@ function wrap(tag) {
   const el = textarea.value
   const start = el.selectionStart
   const end = el.selectionEnd
-  const selected = form.text.slice(start, end)
+  let selected = form.text.slice(start, end)
   let open = `<${tag}>`
   if (tag === 'a') {
     const href = prompt('Ссылка (http:// или https://)', 'https://')
     if (!href) return
     const title = (prompt('Подсказка при наведении (можно оставить пустой)', '') || '').replace(/["<>]/g, '').trim()
-    open = `<a href="${href.replace(/["<>\s]/g, '')}"${title ? ` title="${title}"` : ''}>`
+    const clean = href.replace(/["<>\s]/g, '')
+    open = `<a href="${clean}"${title ? ` title="${title}"` : ''}>`
+    if (!selected) selected = clean // текст не выделен: подпись ссылки будет самим адресом
   }
   form.text = form.text.slice(0, start) + open + selected + `</${tag}>` + form.text.slice(end)
   requestAnimationFrame(() => {

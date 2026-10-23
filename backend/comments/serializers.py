@@ -1,4 +1,6 @@
+import html
 import os
+import re
 
 from django.core.validators import RegexValidator, URLValidator
 from django.db import transaction
@@ -30,6 +32,10 @@ def sanitize_text(value: str) -> str:
         raise serializers.ValidationError(str(exc))
     if not cleaned:
         raise serializers.ValidationError("Сообщение не может быть пустым")
+    # Только теги без текста внутри (например, <a href="..."></a>) на странице не видно
+    visible = html.unescape(re.sub(r"<[^>]*>", "", cleaned)).replace("\xa0", " ").strip()
+    if not visible:
+        raise serializers.ValidationError("В сообщении нет текста: внутри тегов должен быть текст")
     return cleaned
 
 
